@@ -23,7 +23,7 @@ fast.register(scopes, { prefix: '/api' })
 
 
 // spin up the server
-fast.listen({ port: Number(process.env?.PORT) || 4200 }, (err, address) => {
+fast.listen({ port: Number(process.env?.PORT) || 4200, host: '0.0.0.0' }, (err, address) => {
     if (err) {
         fast.log.error(err)
         process.exit(1)
