@@ -1,0 +1,1 @@
+# lp10-event-portal-backend
