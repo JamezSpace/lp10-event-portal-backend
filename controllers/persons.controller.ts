@@ -95,6 +95,43 @@ const putPerson = async (request: FastifyRequest<{ Params: { id: string }, Body:
     }
 }
 
+// PUT persons
+const putPersons = async (
+    ids_array: string[],
+    updates: object
+) => {
+    try {
+        if (!Array.isArray(ids_array) || ids_array.some(i => !ObjectId.isValid(i))) {
+            return {
+                message: "unsuccessful",
+                reason: "invalid ids!"
+            };
+        }
+
+        const objectIds = ids_array.map(i => new ObjectId(i));
+
+        const result = await persons.updateMany({ _id: { $in: objectIds } }, { $set: updates });
+
+        if (result.matchedCount === 0) {
+            return {
+                message: "unsuccessful",
+                reason: "persons not found!"
+            };
+        }
+
+        return {
+            message: "successful",
+            modifiedCount: result.modifiedCount
+        };
+
+    } catch (error: any) {
+        return {
+            message: "unsuccessful",
+            error: error.message
+        };
+    }
+};
+
 
 // DELETE person
 const deletePerson = async (request: FastifyRequest<{ Params: { id: string } }>,
@@ -125,6 +162,7 @@ export {
     deletePerson, getAllPersons,
     getOnePerson,
     postPerson,
-    putPerson
+    putPerson,
+    putPersons
 };
 

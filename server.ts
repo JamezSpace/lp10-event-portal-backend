@@ -3,6 +3,7 @@ import { configDotenv } from "dotenv";
 import { zonesPlugin } from "./routes/zones.routes";
 import { personsPlugin } from "./routes/persons.routes";
 import { paymentPlugin } from "./routes/payments.routes";
+import fastifyCors from '@fastify/cors';
 
 configDotenv()
 const fast = fastify({ logger: true })
@@ -19,6 +20,9 @@ async function scopes(scope: FastifyInstance) {
     scope.register(paymentPlugin, { prefix: 'payments' })
 }
 
+fast.register(fastifyCors, { 
+    origin: '*' // Adjust based on security needs 
+});
 fast.register(scopes, { prefix: '/api' })
 
 
