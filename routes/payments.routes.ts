@@ -1,38 +1,137 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { verfiyPayment } from "../controllers/payments.controller";
-import { putPersons } from "../controllers/persons.controller";
+import {
+	initPaystackPayment,
+	verifyPaystackPayment,
+} from "../controllers/payments.controller";
+import { payment_schema, PaymentBody } from "../interfaces/payments.types";
 
+// async function markPersonsAsPaid(ids_array: string[]) {
+// 	const result = await putPersons(ids_array, { hasPaid: true });
 
-async function markPersonsAsPaid(ids_array: string[]) {
-    const result = await putPersons(ids_array, { hasPaid: true})
+// 	if (result.message !== "successful") return undefined;
 
-    if (result.message !== 'successful') return undefined
-
-    return result.modifiedCount;
-}
+// 	return result.modifiedCount;
+// }
 
 export async function paymentPlugin(fastify: FastifyInstance, opts: any) {
-    // verify flutterwave payment
-    fastify.post('/verify/:transaction_id', async (request: FastifyRequest<{ Params: { transaction_id: number }, Body: { amount: number, ids : string[] } }>, response: FastifyReply) => {
-        const { transaction_id } = request.params;
-        const { amount, ids } = request.body;
-        
-        const result = await verfiyPayment(transaction_id);       
+	// verify flutterwave payment
+	// fastify.post(
+	// 	"/verify/:transaction_id",
+	// 	async (
+	// 		request: FastifyRequest<{
+	// 			Params: { transaction_id: number };
+	// 			Body: { amount: number; ids: string[] };
+	// 		}>,
+	// 		response: FastifyReply
+	// 	) => {
+	// 		const { transaction_id } = request.params;
+	// 		const { amount, ids } = request.body;
 
-        if (result.status === 'valid') {
-            // Extra validation
-            if (result.paymentData.amount !== amount || result.paymentData.currency !== 'NGN') {
-              return response.code(400).send({ status: 'invalid', message: 'Amount or currency mismatch' });
-            }
-          
-            // Mark persons as paid
-            const updatedPerson = await markPersonsAsPaid(ids);
-          
-            if (!updatedPerson) {
-              return response.code(404).send({ status: 'error', message: 'User not found' });
-            }
-          
-            return response.code(200).send({ status: 'valid', payment: result.paymentData, user: updatedPerson });
-          }
-    })
+	// 		const result = await verifyFlutterwavePayment(transaction_id);
+
+	// 		if (result.status === "valid") {
+	// 			// Extra validation
+	// 			if (
+	// 				result.paymentData.amount !== amount ||
+	// 				result.paymentData.currency !== "NGN"
+	// 			) {
+	// 				return response.code(400).send({
+	// 					status: "invalid",
+	// 					message: "Amount or currency mismatch",
+	// 				});
+	// 			}
+
+	// 			// Mark persons as paid
+	// 			const updatedPerson = await markPersonsAsPaid(ids);
+
+	// 			if (!updatedPerson) {
+	// 				return response
+	// 					.code(404)
+	// 					.send({ status: "error", message: "User not found" });
+	// 			}
+
+	// 			return response.code(200).send({
+	// 				status: "valid",
+	// 				payment: result.paymentData,
+	// 				user: updatedPerson,
+	// 			});
+	// 		}
+	// 	}
+	// );
+
+	// init paystack payment
+	fastify.post(
+		"/paystack",
+		{ schema: { body: payment_schema } },
+		async (
+			request: FastifyRequest<{ Body: PaymentBody }>,
+			reply: FastifyReply
+		) => {
+			try {
+				const paystack_response = await initPaystackPayment(
+					request.body.name,
+					request.body.email,
+					request.body.amount
+				);
+
+				// send auth url to frontend for paystack checkout
+				reply.code(200).send({
+					success: true,
+					message: "Paystack transaction initialized successfully",
+					data: paystack_response,
+				});
+			} catch (error: any) {
+				reply.code(500).send({
+					success: false,
+					message: "Internal Server Error",
+					error: error.message,
+				});
+			}
+		}
+	);
+
+	// verify paystack payment
+	fastify.get(
+		"/paystack/verify",
+		async (
+			request: FastifyRequest<{ Querystring: { reference: string } }>,
+			reply: FastifyReply
+		) => {
+			try {
+				if (!request.query.reference)
+					return reply
+						.code(400)
+						.send({ success: false, message: "Missing reference" });
+
+				const verification = await verifyPaystackPayment(
+					request.query.reference
+				);
+
+				// user either didn't pay eventually or abandoned payment
+				if (verification.status !== "success") {
+					return reply.code(200).send({
+						success: false,
+						message: `Payment ${verification.status}`,
+						data: {
+							created_at: verification.created_at,
+						},
+					});
+				}
+
+				return reply.code(200).send({
+					success: true,
+					message: "Payment Complete",
+					data: verification,
+				});
+			} catch (error: any) {
+				console.error(error);
+
+				reply.code(500).send({
+					success: false,
+					message: "Internal error during verification",
+					error: error.message,
+				});
+			}
+		}
+	);
 }

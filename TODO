@@ -1,0 +1,1 @@
+- in the verify payment function, check payers info stored in the databse and cross check amount payment with that

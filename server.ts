@@ -1,37 +1,55 @@
-import fastify, { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import fastify, {
+	FastifyInstance,
+	FastifyReply,
+	FastifyRequest,
+} from "fastify";
+import fastifyCors from "@fastify/cors";
+import { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import { configDotenv } from "dotenv";
 import { zonesPlugin } from "./routes/zones.routes";
 import { personsPlugin } from "./routes/persons.routes";
 import { paymentPlugin } from "./routes/payments.routes";
-import fastifyCors from '@fastify/cors';
+import { connect_to_database } from "./utils/db.utils";
 
-configDotenv()
-const fast = fastify({ logger: true })
+configDotenv();
+const fast = fastify({ logger: true }).withTypeProvider<TypeBoxTypeProvider>();
 
 // To prefix all endpoints with 'api', I created a general scopes function that houses the base endpoint and all other endpoints in their respective plugins
 async function scopes(scope: FastifyInstance) {
-    scope.get('/', async (_req: FastifyRequest, response: FastifyReply) => {
-        return response.send('Hit the base endpoint!')
-    })
+	scope.get("/", async (_req: FastifyRequest, response: FastifyReply) => {
+		return response.send("Hit the base endpoint!");
+	});
 
-    // register plugins
-    scope.register(zonesPlugin, { prefix: 'zones' })
-    scope.register(personsPlugin, { prefix: 'persons' })
-    scope.register(paymentPlugin, { prefix: 'payments' })
+	// register plugins
+	scope.register(zonesPlugin, { prefix: "zones" });
+	scope.register(personsPlugin, { prefix: "persons" });
+	scope.register(paymentPlugin, { prefix: "payments" });
 }
 
-fast.register(fastifyCors, { 
-    origin: '*' // Adjust based on security needs 
+fast.register(fastifyCors, {
+	origin: true, // Adjust based on security needs
+    methods: ['GET','POST','PUT', 'DELETE']
 });
-fast.register(scopes, { prefix: '/api' })
+fast.register(scopes, { prefix: "/api" });
 
+// connect to db
+(async () => {
+    try {
+        await connect_to_database();
+    } catch (error) {
+        console.error(error);
+    }
+})()
 
 // spin up the server
-fast.listen({ port: Number(process.env?.PORT) || 4200, host: '0.0.0.0' }, (err, address) => {
-    if (err) {
-        fast.log.error(err)
-        process.exit(1)
-    }
+fast.listen(
+	{ port: Number(process.env?.PORT) || 4200, host: "0.0.0.0" },
+	(err, address) => {
+		if (err) {
+			fast.log.error(err);
+			process.exit(1);
+		}
 
-    fast.log.info(`Server running on port ${address}!`)
-})
+		fast.log.info(`Server running on port ${address}!`);
+	}
+);
