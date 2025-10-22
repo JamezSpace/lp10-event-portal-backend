@@ -4,6 +4,7 @@ import {
 	verifyPaystackPayment,
 } from "../controllers/payments.controller";
 import { payment_schema, PaymentBody } from "../interfaces/payments.types";
+import { createHmac } from "crypto";
 
 // async function markPersonsAsPaid(ids_array: string[]) {
 // 	const result = await putPersons(ids_array, { hasPaid: true });
@@ -109,20 +110,26 @@ export async function paymentPlugin(fastify: FastifyInstance, opts: any) {
 
 				// user either didn't pay eventually or abandoned payment
 				if (verification.status !== "success") {
-					return reply.code(200).send({
-						success: false,
-						message: `Payment ${verification.status}`,
-						data: {
-							created_at: verification.created_at,
-						},
-					});
+					return reply.redirect(
+						`${process.env.FRONTEND_URL}/payment-status?status=failed`
+					);
+					// return reply.code(200).send({
+					// 	success: false,
+					// 	message: `Payment ${verification.status}`,
+					// 	data: {
+					// 		created_at: verification.created_at,
+					// 	},
+					// });
 				}
 
-				return reply.code(200).send({
-					success: true,
-					message: "Payment Complete",
-					data: verification,
-				});
+				return reply.redirect(
+					`${process.env.FRONTEND_URL}/payment-status?status=success`
+				);
+				// return reply.code(200).send({
+				// 	success: true,
+				// 	message: "Payment Complete",
+				// 	data: verification,
+				// });
 			} catch (error: any) {
 				console.error(error);
 
@@ -131,6 +138,71 @@ export async function paymentPlugin(fastify: FastifyInstance, opts: any) {
 					message: "Internal error during verification",
 					error: error.message,
 				});
+			}
+		}
+	);
+
+	fastify.post(
+		"/webhooks/paystack",
+		async (
+			request: FastifyRequest<{ Body: { event: string; data: any } }>,
+			reply: FastifyReply
+		) => {
+			try {
+				// retrieve Paystack signature header
+				const paystackSignature = request.headers[
+					"x-paystack-signature"
+				] as string;
+				if (!paystackSignature) {
+					return reply
+						.code(401)
+						.send({ success: false, message: "Missing signature" });
+				}
+
+				// verify signature ensuring request is truly from paystack
+				const secret = process.env.PAYSTACK_SECRET_KEY!;
+				const hash = createHmac("sha512", secret)
+					.update(JSON.stringify(request.body))
+					.digest("hex");
+
+				const signature = request.headers["x-paystack-signature"];
+
+				if (hash !== signature) {
+					return reply.code(401).send({ success: false, message: "Invalid signature" });
+				}
+
+				// get event = "charge.success"
+				const event = request.body.event;
+				const data = request.body.data;
+
+				if (event === "charge.success") {
+					const reference = data.reference;
+
+					// STEP 4: Reuse your verifyPaystackPayment logic
+					const verification = await verifyPaystackPayment(reference);
+
+					if (
+						verification.status === "success" &&
+						verification.valid
+					) {
+						console.log(
+							`Payment verified via webhook for reference: ${reference}`
+						);
+					} else {
+						console.warn(
+							`Payment webhook received but invalid: ${reference}`
+						);
+					}
+				} else {
+					console.log(`Ignored Paystack event: ${event}`);
+				}
+
+				return reply.code(200).send({ success: true });
+			} catch (error: any) {
+				console.error("Webhook error:", error);
+				return reply
+					.code(500)
+					.send({ success: false, message: error.message });
 			}
 		}
 	);

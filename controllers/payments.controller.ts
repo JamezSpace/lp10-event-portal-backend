@@ -2,6 +2,7 @@ import { Collection, ObjectId } from "mongodb";
 import { PaystackInit } from "../interfaces/paystack.interfaces";
 import client from "../utils/db.utils";
 import { Payer } from "../interfaces/payer.interfaces";
+import { Person } from "../interfaces/person.types";
 
 const verifyFlutterwavePayment = async (transaction_id: number) => {
 	try {
@@ -124,6 +125,7 @@ const verifyPaystackPayment = async (transaction_ref: string) => {
 			return {
 				...necessary_payment_details,
 				status: paystack_response.data.status,
+                valid: false,
 				message: "user didn't complete transaction",
 			};
 		}
@@ -145,6 +147,13 @@ const verifyPaystackPayment = async (transaction_ref: string) => {
 			});            
 
 			if (!updated) throw new Error("Payer not found for update!");
+
+            // update person's paid for 'hasPaid' status
+            const updatedPersons = await updatedPersonsThatPaid(transaction_ref, {
+                hasPaid: true
+            })
+
+            if (!updatedPersons) throw new Error("Person paid for not found for update!");
 		}
 
 		return {
@@ -161,7 +170,9 @@ const verifyPaystackPayment = async (transaction_ref: string) => {
 };
 
 const payers: Collection = client.db().collection("payers");
+const persons: Collection = client.db().collection("persons");
 let payers_id: string;
+
 const storePayersInformation = async (
 	payers_name: string,
 	payers_email: string,
@@ -223,5 +234,25 @@ const updatedPayersInformation = async (
 		return false;
 	}
 };
+
+const updatedPersonsThatPaid = async (
+	transaction_ref: string,
+	update_to_make_on_person: Partial<Person>
+) => {
+    try {
+        const updatedPersons = await persons.updateMany(
+            { transaction_ref: transaction_ref },
+            { $set: update_to_make_on_person }
+        )
+
+        if (!updatedPersons) throw new Error("A person/persons doesnt exist");
+
+		return true;
+    } catch (error) {
+        console.error(error);
+
+		return false;
+    }
+}
 
 export { verifyFlutterwavePayment, initPaystackPayment, verifyPaystackPayment };

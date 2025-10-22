@@ -1,6 +1,6 @@
 import { Type, Static } from "@fastify/type-provider-typebox";
 
-const person_schema = Type.Array({
+const person_schema = Type.Object({
     first_name: Type.String(),
     last_name: Type.String(),
     email: Type.String({format: 'email'}),

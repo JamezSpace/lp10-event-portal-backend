@@ -5,13 +5,11 @@ import fastify, {
 } from "fastify";
 import fastifyCors from "@fastify/cors";
 import { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
-import { configDotenv } from "dotenv";
 import { zonesPlugin } from "./routes/zones.routes";
 import { personsPlugin } from "./routes/persons.routes";
 import { paymentPlugin } from "./routes/payments.routes";
 import { connect_to_database } from "./utils/db.utils";
 
-configDotenv();
 const fast = fastify({ logger: true }).withTypeProvider<TypeBoxTypeProvider>();
 
 // To prefix all endpoints with 'api', I created a general scopes function that houses the base endpoint and all other endpoints in their respective plugins
