@@ -25,7 +25,7 @@ async function scopes(scope: FastifyInstance) {
 }
 
 fast.register(fastifyCors, {
-	origin: true, // Adjust based on security needs
+	origin: [`${process.env.FRONTEND_URL}`],
     methods: ['GET','POST','PUT', 'DELETE']
 });
 fast.register(scopes, { prefix: "/api" });
