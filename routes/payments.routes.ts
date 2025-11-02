@@ -123,7 +123,7 @@ export async function paymentPlugin(fastify: FastifyInstance, opts: any) {
 				}
 
 				return reply.redirect(
-					`${process.env.FRONTEND_URL}/payment-status?status=success`
+					`${process.env.FRONTEND_URL}/payment-status?status=success&ref=${request.query.reference}`
 				);
 				// return reply.code(200).send({
 				// 	success: true,
@@ -142,6 +142,7 @@ export async function paymentPlugin(fastify: FastifyInstance, opts: any) {
 		}
 	);
 
+    // webhook for backend-backend operation 
 	fastify.post(
 		"/webhooks/paystack",
 		async (
@@ -178,7 +179,7 @@ export async function paymentPlugin(fastify: FastifyInstance, opts: any) {
 				if (event === "charge.success") {
 					const reference = data.reference;
 
-					// STEP 4: Reuse your verifyPaystackPayment logic
+					// Reusing my verifyPaystackPayment logic
 					const verification = await verifyPaystackPayment(reference);
 
 					if (
