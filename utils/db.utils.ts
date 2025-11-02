@@ -1,8 +1,8 @@
 import { MongoClient, ServerApiVersion } from "mongodb";
 
 const password = encodeURIComponent(process.env?.DB_PASSWORD || ""),
-    // uri = `mongodb+srv://${process.env?.DB_USER}:${password}@freecluster.jdr5d.mongodb.net/lp10?retryWrites=true&w=majority&appName=FreeCluster`
-    uri = 'mongodb://127.0.0.1:27017/lp10-event-portal'
+    uri = `mongodb+srv://${process.env?.DB_USER}:${password}@freecluster.jdr5d.mongodb.net/lp10?retryWrites=true&w=majority&appName=FreeCluster`
+    // uri = 'mongodb://127.0.0.1:27017/lp10-event-portal'
     
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client: MongoClient = new MongoClient(uri, {
