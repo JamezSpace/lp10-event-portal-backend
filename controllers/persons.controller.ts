@@ -1,9 +1,9 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { Collection, InsertManyResult, ObjectId } from "mongodb";
 import { Person } from "../interfaces/person.types";
-import client from "../utils/db.utils";
+import {mongo_client} from "../utils/db.utils";
 
-const persons: Collection = client.db().collection("persons");
+const persons: Collection = mongo_client.db().collection("persons");
 
 // GET all
 const getAllPersons = async (

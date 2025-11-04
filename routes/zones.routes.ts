@@ -1,8 +1,8 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { Collection } from "mongodb";
-import client from "../utils/db.utils";
+import mongo_client from "../utils/db.utils";
 
-const zones: Collection = client.db().collection("zones");
+const zones: Collection = mongo_client.db().collection("zones");
 
 export async function zonesPlugin(fastify: FastifyInstance, opts: any) {
     // fetch all zones

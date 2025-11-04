@@ -1,6 +1,6 @@
 import { Collection, ObjectId } from "mongodb";
 import { PaystackInit } from "../interfaces/paystack.interfaces";
-import client from "../utils/db.utils";
+import {mongo_client, redis_client} from "../utils/db.utils";
 import { Payer } from "../interfaces/payer.interfaces";
 import { Person } from "../interfaces/person.types";
 
@@ -106,7 +106,11 @@ const verifyPaystackPayment = async (transaction_ref: string) => {
 			}
 		);
 
-		const paystack_response = await response.json();
+		const paystack_response = await response.json(),
+            // fetch payers id from in memory db (redis)
+            payers_id = await redis_client.get(`backend_payers_id:t_ref:${transaction_ref}`) 
+
+        if(!payers_id) throw new Error("Payer's id doesn't exist in redis server!")
 
 		const payer = await retrievePayersInformation(payers_id);
 		if (!payer) throw new Error("Payer not found (undefined)");
@@ -140,8 +144,8 @@ const verifyPaystackPayment = async (transaction_ref: string) => {
 			};
 
         // ensures idempotency (payment not processed twice)
-		if (payer.status !== "verified") {
-			// update payer's status
+		if (payer.status !== "verified") {          
+            // update payer's status
 			const updated = await updatedPayersInformation(payers_id, {
 				status: "verified",
 			});            
@@ -169,9 +173,8 @@ const verifyPaystackPayment = async (transaction_ref: string) => {
 	}
 };
 
-const payers: Collection = client.db().collection("payers");
-const persons: Collection = client.db().collection("persons");
-let payers_id: string;
+const payers: Collection = mongo_client.db().collection("payers");
+const persons: Collection = mongo_client.db().collection("persons");
 
 const storePayersInformation = async (
 	payers_name: string,
@@ -189,9 +192,13 @@ const storePayersInformation = async (
 			status: "pending",
 		});
 
-		if (!created_payer.acknowledged) throw new Error("Payer wasn't saved");
-		// save the just stored payer's id in memory for verification that would happen almost immediately
-		else payers_id = new String(created_payer.insertedId).toString();
+		if (!created_payer.acknowledged) throw new Error("Payer wasn't saved to the database");
+		else {
+            // save the just stored payer's id in memory for verification that would happen almost immediately
+            // implementation with redis
+            const saved = await redis_client.setEx(`backend_payers_id:t_ref:${transaction_ref}`, 180, new String(created_payer.insertedId).toString());
+            if(saved !== 'OK') throw new Error("Payer's ID wasn't saved to Redis")
+        }
 
 		return true;
 	} catch (error) {

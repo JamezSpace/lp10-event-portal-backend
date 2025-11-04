@@ -1,8 +1,8 @@
 import { Collection } from "mongodb";
-import client from "../utils/db.utils";
+import {mongo_client} from "../utils/db.utils";
 
-const payers: Collection = client.db().collection("payers");
-const persons: Collection = client.db().collection("persons");
+const payers: Collection = mongo_client.db().collection("payers");
+const persons: Collection = mongo_client.db().collection("persons");
 
 const getRegistrationByRef = async (transaction_reference: string) => {
 	try {

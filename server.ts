@@ -8,7 +8,7 @@ import { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import { zonesPlugin } from "./routes/zones.routes";
 import { personsPlugin } from "./routes/persons.routes";
 import { paymentPlugin } from "./routes/payments.routes";
-import { connect_to_database } from "./utils/db.utils";
+import { connect_to_database, connect_to_redis } from "./utils/db.utils";
 import { registrationPlugin } from "./routes/registrations.routes";
 
 const fast = fastify({ logger: true }).withTypeProvider<TypeBoxTypeProvider>();
@@ -36,6 +36,7 @@ fast.register(scopes, { prefix: "/api" });
 (async () => {
     try {
         await connect_to_database();
+        await connect_to_redis();
     } catch (error) {
         console.error(error);
     }
