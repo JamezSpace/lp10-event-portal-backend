@@ -2,7 +2,7 @@
 
 ## Database schemas
 ### Persons
-- id: _number_,
+- id: _ObjectId_,
 - first_name: _string_,
 - last_name: _string_,
 - email: _string_,
@@ -15,10 +15,11 @@
 - province?: _string_,
 - denomination?: _string_,
 - details?: _string_,
-- hasPaid: _boolean_
+- hasPaid: _boolean_,
+- transaction_ref: _string_,
 
 ### Payers
-- id: _number_,
+- id: _ObjectId_,
 - name: _string_,
 - email: _string_,
 - expected_amount: _number_,

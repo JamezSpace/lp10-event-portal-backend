@@ -10,6 +10,7 @@ import { personsPlugin } from "./routes/persons.routes";
 import { paymentPlugin } from "./routes/payments.routes";
 import { connect_to_database, connect_to_redis } from "./utils/db.utils";
 import { registrationPlugin } from "./routes/registrations.routes";
+import { cleanupUnverifiedUsersJob } from "./utils/job.utils";
 
 const fast = fastify({ logger: true }).withTypeProvider<TypeBoxTypeProvider>();
 
@@ -41,6 +42,9 @@ fast.register(scopes, { prefix: "/api" });
         console.error(error);
     }
 })()
+
+// Start cleanup job
+cleanupUnverifiedUsersJob.start();
 
 // spin up the server
 fast.listen(

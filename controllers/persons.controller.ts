@@ -1,9 +1,9 @@
-import { FastifyReply, FastifyRequest } from "fastify";
+import { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { Collection, InsertManyResult, ObjectId } from "mongodb";
 import { Person } from "../interfaces/person.types";
-import {mongo_client} from "../utils/db.utils";
+import { mongo_client } from "../utils/db.utils";
 
-const persons: Collection = mongo_client.db().collection("persons");
+const persons: Collection = mongo_client.db().collection("persons")
 
 // GET all
 const getAllPersons = async (
@@ -73,8 +73,9 @@ const postPersons = async (
 
 			if (!resultMany.acknowledged) throw new Error("Names Not Saved!");
 
+			// send api response
 			return response.code(201).send({
-                success: true,
+				success: true,
 				message: `${resultMany.insertedCount} Inserts Successful!`,
 				data: {
 					ids: resultMany.insertedIds,
@@ -88,7 +89,7 @@ const postPersons = async (
 
 		return response.code(201).send({
 			success: true,
-			message: 'Insert Successful!',
+			message: "Insert Successful!",
 			data: {
 				ids: result.insertedId,
 			},
