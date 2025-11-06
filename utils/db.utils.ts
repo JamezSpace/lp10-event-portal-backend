@@ -39,7 +39,7 @@ const redis_client_config: RedisClientOptions = {
 };
 const redis_client = createClient(redis_client_config);
 
-redis_client.on("error", (err) => console.error("Redis Client Error:", err));
+redis_client.on("error", (err: any) => console.error("Redis Client Error:", err));
 
 let redisConnected = false;
 export async function connect_to_redis() {
