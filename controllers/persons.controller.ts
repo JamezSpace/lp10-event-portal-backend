@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { FastifyReply, FastifyRequest } from "fastify";
 import { Collection, InsertManyResult, ObjectId } from "mongodb";
 import { Person } from "../interfaces/person.types";
 import { mongo_client } from "../utils/db.utils";
@@ -113,7 +113,10 @@ const putPerson = async (
 		const updates = request.body;
 
 		if (!ObjectId.isValid(id)) {
-			return response.code(400).send({ error: "Invalid ID format" });
+			return response.code(400).send({ 
+                success: false,
+                message: "Invalid ID format" 
+            });
 		}
 
 		const result = await persons.updateOne(
@@ -122,7 +125,10 @@ const putPerson = async (
 		);
 
 		if (result.matchedCount === 0) {
-			return response.code(404).send({ error: "Person not found" });
+			return response.code(404).send({ 
+                success: false,
+                message: "Person not found" 
+            });
 		}
 
 		return response.code(204).send({
@@ -197,10 +203,15 @@ const deletePerson = async (
 ) => {
 	try {
 		const { id } = request.params;
+        if(!id) return response.code(400).send({
+				success: false,
+				message: "Incomplete credentials (no id provided)",
+			});
+
 		if (!ObjectId.isValid(id)) {
 			return response.code(400).send({
-				success: true,
-				error: "Invalid ID format",
+				success: false,
+				message: "Invalid ID format",
 			});
 		}
 
@@ -209,7 +220,7 @@ const deletePerson = async (
 		if (result.deletedCount === 0) {
 			return response.code(404).send({
 				success: false,
-				error: "Person not found",
+				message: "Person not found",
 			});
 		}
 

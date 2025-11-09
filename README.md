@@ -27,3 +27,20 @@
 - status: _string ['pending', 'verified']_
 - created_at: _date | string_
 - processed_at: _date | string_
+
+### Events
+- id: _ObjectId_,
+- name: _string_,
+- venue: _string_,
+- recurring_event_id: _ObjectId_,
+- created_at: _date | string_
+- modified_at: _date | string_
+
+### Recurring Events
+- id: _ObjectId_,
+- name: _string_,
+- description: _string_,
+- month: _string_,
+- duration_in_days: _number_,
+- created_at: _date | string_
+- modified_at: _date | string_

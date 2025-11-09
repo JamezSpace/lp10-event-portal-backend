@@ -6,14 +6,6 @@ import {
 import { payment_schema, PaymentBody } from "../interfaces/payments.types";
 import { createHmac } from "crypto";
 
-// async function markPersonsAsPaid(ids_array: string[]) {
-// 	const result = await putPersons(ids_array, { hasPaid: true });
-
-// 	if (result.message !== "successful") return undefined;
-
-// 	return result.modifiedCount;
-// }
-
 export async function paymentPlugin(fastify: FastifyInstance, opts: any) {
 	// verify flutterwave payment
 	// fastify.post(
