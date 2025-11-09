@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { Collection } from "mongodb";
 import { mongo_client } from "../utils/db.utils";
+import { Event } from "../interfaces/events.types";
 
 const events: Collection = mongo_client.db().collection("events");
 
@@ -40,8 +41,34 @@ const getAllEvents = async (request: FastifyRequest, reply: FastifyReply) => {
 	}
 };
 
+// post an event
+const postAnEvent = async (
+	request: FastifyRequest<{ Body: Partial<Event> }>,
+	reply: FastifyReply
+) => {
+	try {
+		const event_data = request.body;
 
-// post a recurring event
-const postARecurringEvent = 
+		const result = await events.insertOne({
+			name: event_data.name,
+			type: event_data.type,
+			recurring_event_id: event_data.recurring_event_id,
+			venue: event_data.venue,
+			created_at: Date.now()
+		});
 
-export { getAllEvents };
+		return reply.code(201).send({
+			success: true,
+			message: "Event created successfully",
+			data: result.insertedId,
+		});
+	} catch (error: any) {
+		return reply.code(500).send({
+			success: false,
+			message: "Internal server error",
+			error: error.message,
+		});
+	}
+};
+
+export { getAllEvents, postAnEvent };

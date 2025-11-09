@@ -32,7 +32,8 @@
 - id: _ObjectId_,
 - name: _string_,
 - venue: _string_,
-- recurring_event_id: _ObjectId_,
+- type: _string ['recurring', 'one-time']_
+- recurring_event_id: _ObjectId | null_,
 - created_at: _date | string_
 - modified_at: _date | string_
 
