@@ -9,7 +9,7 @@ import {
 	postARecurringEvent,
     putARecurringEvent,
 } from "../controllers/recurring-events.controller";
-import { Partial } from "@fastify/type-provider-typebox";
+import { Partial, String, Type } from "@fastify/type-provider-typebox";
 
 export async function recurringEventPlugin(
 	fastify: FastifyInstance,
@@ -28,7 +28,7 @@ export async function recurringEventPlugin(
     // put a recurring events
 	fastify.put(
 		"/:id",
-		{ schema: { body: Partial<RecurringEvent> } },
+		{ schema: { body: Type.Partial(recurring_events_schema) } },
 		putARecurringEvent
 	);
 

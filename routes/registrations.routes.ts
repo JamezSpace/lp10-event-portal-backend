@@ -1,14 +1,20 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { getRegistrationByRef } from "../controllers/registrations.controller";
+import { getAllRegistrations, getRegistrationByRef, postAnEventRegistration, putAnEventRegistration } from "../controllers/registrations.controller";
+import { event_registrations_schema } from "../interfaces/registration.types";
+import { Type } from "@fastify/type-provider-typebox";
 
 export async function registrationPlugin(fastify: FastifyInstance, opts: any) {
+
+    fastify.get('/', getAllRegistrations)
+
+    // get registration by transaction ref
 	fastify.get(
-		"/",
+		"/ref/:ref",
 		async (
-			request: FastifyRequest<{ Querystring: { ref: string } }>,
+			request: FastifyRequest<{ Params: { ref: string } }>,
 			reply: FastifyReply
 		) => {
-			const transaction_ref = request.query.ref;
+			const transaction_ref = request.params.ref;
 
 			if (!transaction_ref || transaction_ref === "")
 				return reply.code(400).send({
@@ -35,4 +41,8 @@ export async function registrationPlugin(fastify: FastifyInstance, opts: any) {
 			}
 		}
 	);
+
+    fastify.post('/', {schema: {body: event_registrations_schema}}, postAnEventRegistration)
+
+    fastify.put('/', {schema: {body: Type.Partial(event_registrations_schema)}}, putAnEventRegistration)
 }

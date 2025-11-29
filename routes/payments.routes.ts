@@ -1,9 +1,16 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
+    initCredoPayment,
 	initPaystackPayment,
+	verifyCredoPayment,
 	verifyPaystackPayment,
 } from "../controllers/payments.controller";
-import { payment_schema, PaymentBody } from "../interfaces/payments.types";
+import {
+	credo_payment_schema,
+	CredoPaymentBody,
+	payment_schema,
+	PaymentBody,
+} from "../interfaces/payments.types";
 import { createHmac } from "crypto";
 
 export async function paymentPlugin(fastify: FastifyInstance, opts: any) {
@@ -134,7 +141,7 @@ export async function paymentPlugin(fastify: FastifyInstance, opts: any) {
 		}
 	);
 
-    // webhook for backend-backend operation 
+	// webhook for paystack backend-backend operation
 	fastify.post(
 		"/webhooks/paystack",
 		async (
@@ -161,7 +168,9 @@ export async function paymentPlugin(fastify: FastifyInstance, opts: any) {
 				const signature = request.headers["x-paystack-signature"];
 
 				if (hash !== signature) {
-					return reply.code(401).send({ success: false, message: "Invalid signature" });
+					return reply
+						.code(401)
+						.send({ success: false, message: "Invalid signature" });
 				}
 
 				// get event = "charge.success"
@@ -196,6 +205,90 @@ export async function paymentPlugin(fastify: FastifyInstance, opts: any) {
 				return reply
 					.code(500)
 					.send({ success: false, message: error.message });
+			}
+		}
+	);
+
+	// init credo payment
+	fastify.post(
+		"/credo",
+		{ schema: { body: credo_payment_schema } },
+		async (
+			request: FastifyRequest<{ Body: CredoPaymentBody }>,
+			reply: FastifyReply
+		) => {
+			try {
+                const {
+                    last_name, email, amount, event_id, payment_for
+                } = request.body
+                
+                const credo_response = await initCredoPayment(
+					last_name, email, amount, event_id, payment_for
+				);
+
+				// send auth url to frontend for credo checkout
+				reply.code(200).send({
+					success: true,
+					message: "Credo transaction initialized successfully",
+					data: credo_response,
+				});
+			} catch (error:any) {
+                reply.code(500).send({
+					success: false,
+					message: "Internal Server Error",
+					error: error.message,
+				});
+            }
+		}
+	);
+
+    // verify credo payment
+	fastify.get(
+		"/credo/verify",
+		async (
+			request: FastifyRequest<{ Querystring: { reference: string } }>,
+			reply: FastifyReply
+		) => {
+			try {
+				if (!request.query.reference)
+					return reply
+						.code(400)
+						.send({ success: false, message: "Missing reference" });
+
+				const verification = await verifyCredoPayment(
+					request.query.reference
+				);
+
+				// user either didn't pay eventually or abandoned payment
+				if (verification.status !== "success") {
+					return reply.redirect(
+						`${process.env.FRONTEND_URL}/payment-status?status=failed`
+					);
+					// return reply.code(200).send({
+					// 	success: false,
+					// 	message: `Payment ${verification.status}`,
+					// 	data: {
+					// 		created_at: verification.created_at,
+					// 	},
+					// });
+				}
+
+				return reply.redirect(
+					`${process.env.FRONTEND_URL}/payment-status?status=success&ref=${request.query.reference}`
+				);
+				// return reply.code(200).send({
+				// 	success: true,
+				// 	message: "Payment Complete",
+				// 	data: verification,
+				// });
+			} catch (error: any) {
+				console.error(error);
+
+				reply.code(500).send({
+					success: false,
+					message: "Internal error during verification",
+					error: error.message,
+				});
 			}
 		}
 	);

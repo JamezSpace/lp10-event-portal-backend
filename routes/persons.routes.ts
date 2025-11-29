@@ -26,7 +26,6 @@ export async function personsPlugin(fastify: FastifyInstance, opts: any) {
 			"year_of_birth",
 			"gender",
 			"origin",
-			"hasPaid",
 		],
 		properties: {
 			first_name: { type: "string" },
@@ -35,7 +34,6 @@ export async function personsPlugin(fastify: FastifyInstance, opts: any) {
 			year_of_birth: { type: "number" },
 			gender: { type: "string" },
 			origin: { type: "string" },
-			hasPaid: { type: "boolean" },
 		},
 	};
 	fastify.post(

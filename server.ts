@@ -12,6 +12,7 @@ import { connect_to_database, connect_to_redis } from "./utils/db.utils";
 import { registrationPlugin } from "./routes/registrations.routes";
 import { cleanupUnverifiedUsersJob } from "./utils/job.utils";
 import { eventPlugin } from "./routes/events.routes";
+import { recurringEventPlugin } from "./routes/recurring-events.routes";
 
 const fast = fastify({ logger: true }).withTypeProvider<TypeBoxTypeProvider>();
 
@@ -26,7 +27,7 @@ async function scopes(scope: FastifyInstance) {
 	scope.register(personsPlugin, { prefix: "persons" });
 	scope.register(paymentPlugin, { prefix: "payments" });
     scope.register(eventPlugin, { prefix: "events" })
-    scope.register(eventPlugin, { prefix: "recurring-events" })
+    scope.register(recurringEventPlugin, { prefix: "recurring-events" })
     scope.register(registrationPlugin, { prefix: "registrations" })
 }
 

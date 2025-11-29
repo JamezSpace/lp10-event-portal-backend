@@ -1,9 +1,10 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { Collection, InsertManyResult, ObjectId } from "mongodb";
-import { Person } from "../interfaces/person.types";
+import { PersonWithChurch } from "../interfaces/person.types";
 import { mongo_client } from "../utils/db.utils";
 
-const persons: Collection = mongo_client.db().collection("persons")
+const persons: Collection = mongo_client.db().collection("persons");
+const church: Collection = mongo_client.db().collection("church");
 
 // GET all
 const getAllPersons = async (
@@ -61,38 +62,94 @@ const getOnePerson = async (
 
 // POST person or persons
 const postPersons = async (
-	request: FastifyRequest<{ Body: Person[] }>,
+	request: FastifyRequest<{ Body: PersonWithChurch[] }>,
 	response: FastifyReply
 ) => {
+	const session = mongo_client.startSession();
+
 	try {
-		let resultMany: InsertManyResult<Document>;
+		await session.withTransaction(async () => {
+			const person_details = request.body;
 
-		// Determine if the request body is an array or a single object
-		if (Array.isArray(request.body)) {
-			resultMany = await persons.insertMany(request.body);
+			// Extract core person fields
+			const personInsertPayload = person_details.map((p) => ({
+				first_name: p.first_name,
+				last_name: p.last_name,
+				email: p.email,
+				year_of_birth: p.year_of_birth,
+				gender: p.gender,
+				origin: p.origin,
+			}));
 
-			if (!resultMany.acknowledged) throw new Error("Names Not Saved!");
+			// INSERT INTO PERSONS
+			const personsInsertResult = await persons.insertMany(
+				personInsertPayload
+			);
 
-			// send api response
+			if (!personsInsertResult.acknowledged) {
+				throw new Error("Failed to insert persons");
+			}
+
+			const churchDetailsPayload: any[] = [];
+
+			// Build church_details inserts using the newly inserted IDs
+			person_details.forEach((item, index) => {
+				const personId = personsInsertResult.insertedIds[index];
+
+				const {
+					parish,
+					zone,
+					region,
+					province,
+					denomination,
+					details,
+				} = item;
+
+				// Only insert if at least one church-related field exists
+				if (
+					parish ||
+					zone ||
+					region ||
+					province ||
+					denomination ||
+					details
+				) {
+					churchDetailsPayload.push({
+						person_id: personId,
+						parish,
+						zone,
+						region,
+						province,
+						denomination,
+						details,
+					});
+				}
+			});
+
+			// INSERT INTO CHURCH_DETAILS (if needed)
+			let churchInsertResult = null;
+
+			if (churchDetailsPayload.length > 0) {
+				churchInsertResult = await church.insertMany(
+					churchDetailsPayload
+				);
+
+				if (!churchInsertResult.acknowledged) {
+					throw new Error("Failed to insert church-specific data");
+				}
+			}
+
 			return response.code(201).send({
 				success: true,
-				message: `${resultMany.insertedCount} Inserts Successful!`,
+				message:
+					personsInsertResult.insertedCount > 1
+						? `${person_details.length} persons saved successfully`
+						: "Person saved successfully",
 				data: {
-					ids: resultMany.insertedIds,
+					person_ids: personsInsertResult.insertedIds,
+					church_detail_ids: churchInsertResult?.insertedIds || null,
 				},
 			});
-		}
-
-		const result = await persons.insertOne(request.body);
-
-		if (!result.acknowledged) throw new Error("Names Not Saved!");
-
-		return response.code(201).send({
-			success: true,
-			message: "Insert Successful!",
-			data: {
-				ids: result.insertedId,
-			},
 		});
 	} catch (error: any) {
 		return response.code(500).send({
@@ -100,12 +157,17 @@ const postPersons = async (
 			message: "Internal server error",
 			error: error.message,
 		});
+	} finally {
+		await session.endSession();
 	}
 };
 
 // PUT person
 const putPerson = async (
-	request: FastifyRequest<{ Params: { id: string }; Body: Partial<Person> }>,
+	request: FastifyRequest<{
+		Params: { id: string };
+		Body: Partial<PersonWithChurch>;
+	}>,
 	response: FastifyReply
 ) => {
 	try {
@@ -113,25 +175,78 @@ const putPerson = async (
 		const updates = request.body;
 
 		if (!ObjectId.isValid(id)) {
-			return response.code(400).send({ 
-                success: false,
-                message: "Invalid ID format" 
-            });
+			return response.code(400).send({
+				success: false,
+				message: "Invalid ID format",
+			});
 		}
 
-		const result = await persons.updateOne(
-			{ _id: new ObjectId(id) },
-			{ $set: updates }
-		);
+		// --- Split updates ---
+		const personUpdates: any = {};
+		const churchUpdates: any = {};
 
-		if (result.matchedCount === 0) {
-			return response.code(404).send({ 
-                success: false,
-                message: "Person not found" 
-            });
+		const personFields = [
+			"first_name",
+			"last_name",
+			"email",
+			"year_of_birth",
+			"gender",
+			"origin",
+		];
+
+		const churchFields = [
+			"parish",
+			"zone",
+			"region",
+			"province",
+			"denomination",
+			"details",
+		];
+
+		for (const key of Object.keys(updates)) {
+			if (personFields.includes(key))
+				personUpdates[key] = (updates as any)[key];
+			if (churchFields.includes(key))
+				churchUpdates[key] = (updates as any)[key];
 		}
 
-		return response.code(204).send({
+		// --- Update person ---
+		if (Object.keys(personUpdates).length > 0) {
+			const result = await persons.updateOne(
+				{ _id: new ObjectId(id) },
+				{ $set: personUpdates }
+			);
+
+			if (result.matchedCount === 0) {
+				return response.code(404).send({
+					success: false,
+					message: "Person not found",
+				});
+			}
+		}
+
+		// --- Update or insert church details ---
+		if (Object.keys(churchUpdates).length > 0) {
+			const existingChurch = await church.findOne({
+				person_id: new ObjectId(id),
+			});
+
+			if (!existingChurch) {
+				// insert new church record
+				await church.insertOne({
+					person_id: new ObjectId(id),
+					...churchUpdates,
+				});
+			} else {
+				// update existing church record
+				await church.updateOne(
+					{ person_id: new ObjectId(id) },
+					{ $set: churchUpdates }
+				);
+			}
+		}
+
+		return response.code(200).send({
 			success: true,
 			message: "Person updated successfully!",
 		});
@@ -145,11 +260,12 @@ const putPerson = async (
 };
 
 // PUT persons
+// PUT /persons  (bulk update many persons + church details)
 const putPersons = async (
 	request: FastifyRequest<{
 		Body: {
 			ids: string[];
-			updates: Partial<Person>;
+			updates: Partial<PersonWithChurch>;
 		};
 	}>,
 	reply: FastifyReply
@@ -160,37 +276,85 @@ const putPersons = async (
 		if (!Array.isArray(ids) || ids.some((id) => !ObjectId.isValid(id))) {
 			return reply.code(400).send({
 				success: false,
-				message: "unsuccessful",
-				reason: "invalid ids!",
+				message: "Invalid IDs provided",
 			});
 		}
 
-		const objectIds = ids.map((i) => new ObjectId(i));
+		const objectIds = ids.map((id) => new ObjectId(id));
 
-		const result = await persons.updateMany(
-			{ _id: { $in: objectIds } },
-			{ $set: updates }
-		);
+		// --- Split fields ---
+		const personUpdates: any = {};
+		const churchUpdates: any = {};
 
-		if (result.matchedCount === 0) {
-			return reply.code(404).send({
-				success: false,
-				message: "Update unsuccessful",
-				error: "Persons not found!",
-			});
+		const personFields = [
+			"first_name",
+			"last_name",
+			"email",
+			"year_of_birth",
+			"gender",
+			"origin",
+		];
+
+		const churchFields = [
+			"parish",
+			"zone",
+			"region",
+			"province",
+			"denomination",
+			"details",
+		];
+
+		for (const key of Object.keys(updates)) {
+			if (personFields.includes(key))
+				personUpdates[key] = (updates as any)[key];
+			if (churchFields.includes(key))
+				churchUpdates[key] = (updates as any)[key];
 		}
 
-		return reply.code(204).send({
+		// --- Update persons collection ---
+		let personResult = null;
+		if (Object.keys(personUpdates).length > 0) {
+			personResult = await persons.updateMany(
+				{ _id: { $in: objectIds } },
+				{ $set: personUpdates }
+			);
+		}
+
+		// --- Update church_details for each person ---
+		let modifiedChurch = 0;
+
+		if (Object.keys(churchUpdates).length > 0) {
+			for (const pid of objectIds) {
+				const exists = await church.findOne({ person_id: pid });
+
+				if (!exists) {
+					await church.insertOne({
+						person_id: pid,
+						...churchUpdates,
+					});
+					modifiedChurch++;
+				} else {
+					const cRes = await church.updateOne(
+						{ person_id: pid },
+						{ $set: churchUpdates }
+					);
+					if (cRes.modifiedCount > 0) modifiedChurch++;
+				}
+			}
+		}
+
+		return reply.code(200).send({
 			success: true,
-			message: "successful",
+			message: "Bulk update completed",
 			data: {
-				modifiedCount: result.modifiedCount,
+				persons_modified: personResult?.modifiedCount || 0,
+				church_modified: modifiedChurch,
 			},
 		});
 	} catch (error: any) {
 		return reply.code(500).send({
 			success: false,
-			message: "unsuccessful",
+			message: "Internal server error",
 			error: error.message,
 		});
 	}
@@ -203,7 +367,8 @@ const deletePerson = async (
 ) => {
 	try {
 		const { id } = request.params;
-        if(!id) return response.code(400).send({
+		if (!id)
+			return response.code(400).send({
 				success: false,
 				message: "Incomplete credentials (no id provided)",
 			});

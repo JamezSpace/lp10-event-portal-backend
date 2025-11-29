@@ -72,25 +72,25 @@ const putARecurringEvent = async (
 		if (!id)
 			reply.code(400).send({
 				success: false,
-				message: "Incomplete Credentails (no id specified)",
+				error: "Incomplete Credentails (no id specified)",
 			});
 
 		if (!ObjectId.isValid(id)) {
 			return reply.code(400).send({
 				success: false,
-				message: "Invalid ID format",
+				error: "Invalid ID format",
 			});
 		}
 
 		const result = await recurring_events.updateOne(
 			{ _id: new ObjectId(id) },
-			{ $set: updates }
+			{ $set: {...updates, modified_at: Date.now()} }
 		);
 
 		if (result.matchedCount === 0) {
 			return reply.code(404).send({
 				success: false,
-				message: "Person not found",
+				error: "Person not found",
 			});
 		}
 
@@ -116,13 +116,13 @@ const deleteARecurringEvent = async (
 		if (!id)
 			return reply.code(400).send({
 				success: false,
-				message: "Incomplete credentials (no id provided)",
+				error: "Incomplete credentials (no id provided)",
 			});
 
 		if (!ObjectId.isValid(id)) {
 			return reply.code(400).send({
 				success: false,
-				message: "Invalid ID format",
+				error: "Invalid ID format",
 			});
 		}
 
@@ -133,7 +133,7 @@ const deleteARecurringEvent = async (
 		if (result.deletedCount === 0) {
 			return reply.code(404).send({
 				success: false,
-				message: "Recurring event not found",
+				error: "Recurring event not found",
 			});
 		}
 
