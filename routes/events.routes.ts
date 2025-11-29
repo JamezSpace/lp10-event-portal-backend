@@ -1,10 +1,13 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { deleteAnEvent, getAllEvents, postAnEvent } from "../controllers/events.controller";
+import { deleteAnEvent, getAllEvents, getLiveEvent, postAnEvent } from "../controllers/events.controller";
 import { event_schema } from "../interfaces/events.types";
 
 export async function  eventPlugin (fastify: FastifyInstance, opts: any) {
     // get all events
     fastify.get('/', getAllEvents)
+
+    // get live event
+    fastify.get('/live', getLiveEvent)
 
     // post an event
     fastify.post('/', {schema: { body: event_schema } }, postAnEvent)

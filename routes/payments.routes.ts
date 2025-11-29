@@ -246,17 +246,17 @@ export async function paymentPlugin(fastify: FastifyInstance, opts: any) {
 	fastify.get(
 		"/credo/verify",
 		async (
-			request: FastifyRequest<{ Querystring: { reference: string } }>,
+			request: FastifyRequest<{ Querystring: { transRef: string } }>,
 			reply: FastifyReply
 		) => {
 			try {
-				if (!request.query.reference)
+				if (!request.query.transRef)
 					return reply
 						.code(400)
 						.send({ success: false, message: "Missing reference" });
 
 				const verification = await verifyCredoPayment(
-					request.query.reference
+					request.query.transRef
 				);
 
 				// user either didn't pay eventually or abandoned payment
@@ -274,7 +274,7 @@ export async function paymentPlugin(fastify: FastifyInstance, opts: any) {
 				}
 
 				return reply.redirect(
-					`${process.env.FRONTEND_URL}/payment-status?status=success&ref=${request.query.reference}`
+					`${process.env.FRONTEND_URL}/payment-status?status=success&ref=${request.query.transRef}`
 				);
 				// return reply.code(200).send({
 				// 	success: true,

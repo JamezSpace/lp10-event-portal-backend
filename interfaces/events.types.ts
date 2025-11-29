@@ -19,6 +19,7 @@ const event_schema = Type.Object({
 			}),
 			amount: Type.Number(),
 		})),
+        live: Type.Boolean({default: false, description: 'This field is used to identify the current event registration is being taken for...'}),
 		recurring_event_id: Type.Optional(Type.String()),
 		venue: Type.Optional(Type.String()),
 		start_date: Type.Optional(Type.String({ format: "date" })),

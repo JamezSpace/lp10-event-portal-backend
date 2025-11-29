@@ -53,6 +53,7 @@
 -   venue: _string_;
 -   start*date: string,*
 -   start*time: \_string,*
+-   live: boolean,
 -   created*at: \_string*
 -   modified*at: \_string*
 

@@ -196,9 +196,10 @@ const initCredoPayment = async (
 	// credo gateway params
 	const params = {
 		email,
-		amount: amount * 100,
-		channels: ["card", "bank"],
-		callback_url: `${process.env.HOST_URL}/hi-change-this`,
+		amount: (amount * 100), // converting to kobo
+		// channels: ["card", "bank"],
+        bearer: 1, // 1 means I, the merchant will bear the transaction fee in addition to the 100 naira fixed fee
+		callback_url: `${process.env.HOST_URL}/payments/credo/verify`,
 	};
 
 	// save payers and event registration information to db
@@ -218,7 +219,9 @@ const initCredoPayment = async (
 
 	if (
 		typeof db_insert_response === "undefined" ||
-		!db_insert_response.success || !db_insert_response.payer_id || !db_insert_response.registration_ids
+		!db_insert_response.success ||
+		!db_insert_response.payer_id ||
+		!db_insert_response.registration_ids
 	) {
 		throw new Error("Couldn't save payers and registration detials");
 	}
@@ -253,7 +256,7 @@ const initCredoPayment = async (
 		// for further verification, save the just added payer_id to redis cache to tackle with issues where user closes or interrupts payment flow mid-way or server discrepancies
 		const saved_payer = await redis_client.setEx(
 			`backend_payers_id:t_ref:${transaction_ref}`,
-			180,
+			300,
 			db_insert_response.payer_id.toString()
 		);
 
@@ -272,11 +275,11 @@ const verifyCredoPayment = async (transaction_ref: string) => {
 	try {
 		// api call to verify payment
 		const response = await fetch(
-			`${process.env.CREDO_BASE_API_URL}/transactions/${transaction_ref}/verify`,
+			`${process.env.CREDO_BASE_API_URL}/transaction/${transaction_ref}/verify`,
 			{
 				method: "GET",
 				headers: {
-					Authorization: `Bearer ${process.env.CREDO_SECRET_KEY}`,
+					Authorization: `${process.env.CREDO_SECRET_KEY}`,
 					"Content-Type": "application/json",
 				},
 			}
@@ -287,7 +290,14 @@ const verifyCredoPayment = async (transaction_ref: string) => {
 			payers_id = await redis_client.get(
 				`backend_payers_id:t_ref:${transaction_ref}`
 			);
-
+        
+        if(credo_response.status === 400) {
+            throw new Error("Credo Server says bad request");
+        }
+        
+        // to undertand credo's charging mechanism, and know how to verify appropriately especially coz i had to deduct 100 naira from the amount to pay
+        console.log(credo_response);
+        
 		if (!payers_id)
 			throw new Error("Payer's id doesn't exist in redis server!");
 
@@ -453,8 +463,9 @@ const updatePayersAndRegistrationInformation = async (
 	transaction_ref: string,
 	payers_id: ObjectId,
 	registration_ids: ObjectId[]
-): Promise<{ success: boolean; error?: any } | undefined> => {
+): Promise<{ success: boolean; error?: any }> => {
 	const session = mongo_client.startSession();
+	let update_status !: { success: boolean; error?: any };
 
 	try {
 		await session.withTransaction(async () => {
@@ -478,17 +489,19 @@ const updatePayersAndRegistrationInformation = async (
 			if (updatedRegistrations.matchedCount === 0)
 				throw new Error("No registrations found to update");
 
-			return { success: true };
+			update_status = { success: true };
 		});
 	} catch (error: any) {
 		console.error(
 			"Transaction error in updating transaction reference in payers and registration documents:",
 			error
 		);
-		return { success: false, error: error.message };
+		update_status = { success: false, error: error.message };
 	} finally {
 		await session.endSession();
 	}
+
+    return update_status;
 };
 
 // TODO: According to new db design, remove this and use 'storePayersAndRegistrationInformation' function instead

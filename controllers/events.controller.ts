@@ -24,6 +24,25 @@ const getAllEvents = async (request: FastifyRequest, reply: FastifyReply) => {
 	}
 };
 
+// get live event
+const getLiveEvent = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+        const result = await events.findOne({ live: true });
+
+        return reply.code(200).send({
+            success: true,
+            message: "Live event retrieved successfully",
+            data: result,
+        });
+    } catch (error: any) {
+        return reply.code(500).send({
+            success: false,
+            message: "Internal server error",
+            error: error.message,
+        });
+    }
+};
+
 // POST an event
 const postAnEvent = async (
 	request: FastifyRequest<{ Body: Partial<Event> }>,
@@ -66,6 +85,7 @@ const postAnEvent = async (
 			recurring_event_id: data.recurring_event_id || null,
 			venue: data.venue!,
 			year: data.year!,
+            live: data.live!,
             start_date: data.start_date,
             start_time: data.start_time,
 			created_at: now
@@ -122,4 +142,4 @@ const deleteAnEvent = async (
 	}
 };
 
-export { getAllEvents, postAnEvent, deleteAnEvent };
+export { getAllEvents, getLiveEvent, postAnEvent, deleteAnEvent };
