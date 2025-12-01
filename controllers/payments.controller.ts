@@ -196,9 +196,9 @@ const initCredoPayment = async (
 	// credo gateway params
 	const params = {
 		email,
-		amount: (amount * 100), // converting to kobo
-		// channels: ["card", "bank"],
-        bearer: 1, // 1 means I, the merchant will bear the transaction fee in addition to the 100 naira fixed fee
+		amount: amount * 100, // converting to kobo
+		channels: ["card", "bank"],
+		bearer: 1, // 1 means I, the merchant will bear the transaction fee in addition to the 100 naira fixed fee
 		callback_url: `${process.env.HOST_URL}/payments/credo/verify`,
 	};
 
@@ -241,7 +241,9 @@ const initCredoPayment = async (
 		);
 
 		const credo_response = await response.json();
-		const transaction_ref = credo_response.data.reference;
+		const transaction_ref = credo_response.data.credoReference;
+
+        console.log("Init Credo Payment - transaction ref:", transaction_ref);
 
 		// update stored values in payers and registrations docs with transaction reference gotten from the prior api call
 		const update_status = await updatePayersAndRegistrationInformation(
@@ -256,10 +258,11 @@ const initCredoPayment = async (
 		// for further verification, save the just added payer_id to redis cache to tackle with issues where user closes or interrupts payment flow mid-way or server discrepancies
 		const saved_payer = await redis_client.setEx(
 			`backend_payers_id:t_ref:${transaction_ref}`,
-			300,
+			1200,
 			db_insert_response.payer_id.toString()
 		);
 
+		// console.log("Init Credo Payment - Saved payer in Redis:", saved_payer);
 		if (saved_payer !== "OK")
 			throw new Error("Failed storing payer in Redis");
 
@@ -273,6 +276,11 @@ const initCredoPayment = async (
 
 const verifyCredoPayment = async (transaction_ref: string) => {
 	try {
+		console.log(
+			"Verify Payment Location - transaction ref:",
+			transaction_ref
+		);
+
 		// api call to verify payment
 		const response = await fetch(
 			`${process.env.CREDO_BASE_API_URL}/transaction/${transaction_ref}/verify`,
@@ -290,14 +298,40 @@ const verifyCredoPayment = async (transaction_ref: string) => {
 			payers_id = await redis_client.get(
 				`backend_payers_id:t_ref:${transaction_ref}`
 			);
-        
-        if(credo_response.status === 400) {
-            throw new Error("Credo Server says bad request");
-        }
-        
-        // to undertand credo's charging mechanism, and know how to verify appropriately especially coz i had to deduct 100 naira from the amount to pay
-        console.log(credo_response);
-        
+
+		if (credo_response.status === 400) {
+			throw new Error("Credo Server says bad request");
+		}
+
+		// to undertand credo's charging mechanism, and know how to verify appropriately especially coz i had to deduct 100 naira from the amount to pay
+		// credo response data looks like this:
+		/*
+        data: {
+            status: 200,
+            message: 'Successfully processed',
+            data: {
+                businessName: 'CREDO/Samuel James',
+                businessCode: '700607010910001',
+                transRef: 'Srnr008V0715xma756J3',
+                businessRef: '1556SK5r8O1764593123',
+                debitedAmount: 2000,
+                transAmount: 2000,
+                transFeeAmount: 30,
+                settlementAmount: 1970,
+                customerId: 'adobeclip2003@gmail.com',
+                transactionDate: '2025-12-01 13:46:51',
+                channelId: 0,
+                currencyCode: 'NGN',
+                status: 0,
+                statusMessage: 'Successfully processed',
+                metadata: [],
+                crn: '000000273292'
+            },
+            execTime: 8,
+            error: []
+            } 
+        */
+
 		if (!payers_id)
 			throw new Error("Payer's id doesn't exist in redis server!");
 
@@ -317,7 +351,7 @@ const verifyCredoPayment = async (transaction_ref: string) => {
 		};
 
 		// verify transaction status
-		if (credo_response.data.status !== 200) {
+		if (credo_response.data.status !== 0) {
 			// flag all registrations attached to the payer as 'cancelled'
 			await registrations.updateMany(
 				{ payer_id: new ObjectId(payers_id) },
@@ -355,6 +389,11 @@ const verifyCredoPayment = async (transaction_ref: string) => {
 
 			if (!updated) throw new Error("Payer not found for update!");
 			if (!updated_regs) throw new Error("Registration not updated!");
+
+            // delete the redis cached payer id as it's no longer needed
+            const deleted = await redis_client.del(`backend_payers_id:t_ref:${transaction_ref}`);
+            if (deleted === 0) console.warn("Warning: Failed deleting cached payer id from redis");
+            else console.log("Cached payer id deleted from redis successfully because payment verified");
 		}
 
 		return {
@@ -465,7 +504,7 @@ const updatePayersAndRegistrationInformation = async (
 	registration_ids: ObjectId[]
 ): Promise<{ success: boolean; error?: any }> => {
 	const session = mongo_client.startSession();
-	let update_status !: { success: boolean; error?: any };
+	let update_status!: { success: boolean; error?: any };
 
 	try {
 		await session.withTransaction(async () => {
@@ -501,7 +540,7 @@ const updatePayersAndRegistrationInformation = async (
 		await session.endSession();
 	}
 
-    return update_status;
+	return update_status;
 };
 
 // TODO: According to new db design, remove this and use 'storePayersAndRegistrationInformation' function instead

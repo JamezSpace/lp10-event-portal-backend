@@ -1,5 +1,5 @@
 import { MongoClient, ServerApiVersion } from "mongodb";
-import { createClient, RedisClientOptions, RedisClientType } from "redis";
+import { createClient, RedisClientOptions } from "redis";
 
 const password = encodeURIComponent(process.env?.DB_PASSWORD || ""),
 	uri = `mongodb+srv://${process.env?.DB_USER}:${password}@freecluster.jdr5d.mongodb.net/lp10?retryWrites=true&w=majority&appName=FreeCluster`;

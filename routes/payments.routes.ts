@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
-    initCredoPayment,
+	initCredoPayment,
 	initPaystackPayment,
 	verifyCredoPayment,
 	verifyPaystackPayment,
@@ -11,7 +11,7 @@ import {
 	payment_schema,
 	PaymentBody,
 } from "../interfaces/payments.types";
-import { createHmac } from "crypto";
+import { createHash, createHmac } from "crypto";
 
 export async function paymentPlugin(fastify: FastifyInstance, opts: any) {
 	// verify flutterwave payment
@@ -218,12 +218,15 @@ export async function paymentPlugin(fastify: FastifyInstance, opts: any) {
 			reply: FastifyReply
 		) => {
 			try {
-                const {
-                    last_name, email, amount, event_id, payment_for
-                } = request.body
-                
-                const credo_response = await initCredoPayment(
-					last_name, email, amount, event_id, payment_for
+				const { last_name, email, amount, event_id, payment_for } =
+					request.body;
+
+				const credo_response = await initCredoPayment(
+					last_name,
+					email,
+					amount,
+					event_id,
+					payment_for
 				);
 
 				// send auth url to frontend for credo checkout
@@ -232,17 +235,17 @@ export async function paymentPlugin(fastify: FastifyInstance, opts: any) {
 					message: "Credo transaction initialized successfully",
 					data: credo_response,
 				});
-			} catch (error:any) {
-                reply.code(500).send({
+			} catch (error: any) {
+				reply.code(500).send({
 					success: false,
 					message: "Internal Server Error",
 					error: error.message,
 				});
-            }
+			}
 		}
 	);
 
-    // verify credo payment
+	// verify credo payment
 	fastify.get(
 		"/credo/verify",
 		async (
@@ -259,6 +262,8 @@ export async function paymentPlugin(fastify: FastifyInstance, opts: any) {
 					request.query.transRef
 				);
 
+                console.log("Verification: ", verification);
+                
 				// user either didn't pay eventually or abandoned payment
 				if (verification.status !== "success") {
 					return reply.redirect(
@@ -288,6 +293,81 @@ export async function paymentPlugin(fastify: FastifyInstance, opts: any) {
 					success: false,
 					message: "Internal error during verification",
 					error: error.message,
+				});
+			}
+		}
+	);
+
+	// webhook for credo backend-backend operation
+	fastify.post(
+		"/webhooks/credo",
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			try {
+				// 1. Get Credo signature from headers
+				const credoSignature = request.headers[
+					"x-credo-signature"
+				] as string;
+				if (!credoSignature) {
+					return reply.code(401).send({
+						success: false,
+						message: "Missing Credo signature",
+					});
+				}
+
+				// 2. Construct signed content: Token + BusinessCode
+				const TOKEN = process.env.CREDO_WEBHOOK_TOKEN!;
+				const BUSINESS_CODE = process.env.CREDO_BUSINESS_CODE!;
+
+				if (!TOKEN || !BUSINESS_CODE) {
+					console.error("Credo webhook env variables missing");
+					return reply.code(500).send({
+						success: false,
+						message: "Server misconfigured for Credo webhook",
+					});
+				}
+
+				const signedContent = `${TOKEN}${BUSINESS_CODE}`;
+
+				// 3. Hash using SHA512
+				const expectedSignature = createHash("sha512")
+					.update(signedContent)
+					.digest("hex");
+
+				// 4. Compare signatures
+				if (expectedSignature !== credoSignature) {
+					console.warn("Invalid signature from Credo");
+					return reply.code(401).send({
+						success: false,
+						message: "Invalid signature",
+					});
+				}
+
+				// 5. Extract event and data
+				const { event, data } = request.body as any;
+
+				console.log("Credo webhook event received:", event);
+
+				// 6. Handle only actual payment success events
+				if (event === "transaction.successful") {
+					const transRef = data?.transRef;
+					const amount = data?.transAmount;
+					const customerEmail = data?.customer?.customerEmail;
+
+					console.log("Verified Payment:", {
+						transRef,
+						amount,
+						customerEmail,
+					});
+
+					// 👉 TODO: Mark order as paid, update DB, send emails, etc.
+				}
+
+				return reply.code(200).send({ success: true });
+			} catch (err: any) {
+				console.error("Credo webhook error:", err);
+				return reply.code(500).send({
+					success: false,
+					message: err.message,
 				});
 			}
 		}
